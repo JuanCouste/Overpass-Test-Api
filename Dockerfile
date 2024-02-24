@@ -1,26 +1,27 @@
 FROM wiktorn/overpass-api:0.7.61.4
 
-RUN apt-get update \ 
-	&& apt-get install xz-utils
+ENV OVERPASS_META="yes" \
+	OVERPASS_MODE="init" \
+	OVERPASS_PLANET_URL="http://localhost:17267/uruguay.osm.bz2" \
+	OVERPASS_STOP_AFTER_INIT="true" \
+	OVERPASS_RULES_LOAD="100" \
+	OVERPASS_ALLOW_DUPLICATE_QUERIES="yes"
 
-COPY ./node-v20.10.0-linux-x64.tar.xz ./node.tar.xz
-COPY ./serve ./serve
+COPY ./osmbz2server ./osmbz2server
 
-ENV OVERPASS_META="yes"
-ENV OVERPASS_MODE="init"
-ENV OVERPASS_PLANET_URL="http://localhost:17267/uruguay.osm.bz2"
-ENV OVERPASS_STOP_AFTER_INIT="true"
-ENV OVERPASS_RULES_LOAD="100"
-
-COPY dispatcher_start.sh /app/bin/
-RUN chmod a+rx /app/bin/dispatcher_start.sh
-
-RUN tar -xJf node.tar.xz \
-	&& export PATH="$PATH:/node-v20.10.0-linux-x64/bin" \
-	&& cd /serve && npm install \	
-	&& ( node index & sleep 1 && /app/docker-entrypoint.sh ) \
-	&& rm -rf /serve \
-	&& rm -rf /node-v20.10.0-linux-x64 \
-	&& rm /node.tar.xz
+RUN \
+	# + install gcc
+	apt-get update && apt-get install -y gcc \
+	# + include osm.bz2 static server
+	&& gcc -o ./osmbz2server/server ./osmbz2server/server.c \
+	&& ( cd ./osmbz2server && ./server & sleep 1 ) \ 
+	&& /app/docker-entrypoint.sh \
+	# - remove osm.bz2 static server
+	&& rm -rf /osmbz2server \
+	# - remove gcc
+	&& apt-get remove --purge -y gcc \
+	&& apt-get autoremove -y \
+	&& apt-get clean \
+	&& rm -rf /var/lib/apt/lists/*
 
 ENV OVERPASS_STOP_AFTER_INIT="false"
